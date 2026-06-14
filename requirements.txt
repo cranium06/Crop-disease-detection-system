@@ -1,0 +1,22 @@
+# =============================================================================
+# requirements.txt  —  Streamlit Community Cloud deployment (the running app)
+#
+# app.py only needs these 5 packages (it imports streamlit, tensorflow, numpy,
+# PIL, matplotlib, and config.py — which imports only the stdlib). The FULL
+# documented training/evaluation stack (Chapter 3, Section 3.9) lives in
+# requirements-train.txt.
+#
+# tensorflow-cpu (not tensorflow): Streamlit Cloud has no GPU, so the CPU build
+# is smaller and installs faster. Pinned to 2.12.0 — the version proven locally
+# to load checkpoints/mobilenetv2_best.h5.
+#
+# IMPORTANT: tensorflow-cpu==2.12.0 has wheels for Python 3.8–3.11 only. In the
+# Streamlit Cloud deploy dialog, open "Advanced settings" and select
+# **Python 3.11** (the default may be newer and will fail to install TF 2.12).
+# =============================================================================
+
+tensorflow-cpu==2.12.0
+numpy==1.23.5
+Pillow==9.4.0
+matplotlib==3.7.0
+streamlit==1.32.0

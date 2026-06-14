@@ -1,0 +1,20 @@
+Backbone: MOBILENETV2
+Checkpoint: checkpoints/mobilenetv2_best.h5
+Test set size: 1941 images
+
+Overall Accuracy : 96.65%
+Macro F1-Score   : 0.9551
+
+Per-class Classification Report:
+                                       precision    recall  f1-score   support
+
+                  Tomato Early Blight     0.8634    0.9267    0.8939       150
+                   Tomato Late Blight     0.9510    0.9477    0.9494       287
+                     Tomato Leaf Mold     0.9586    0.9720    0.9653       143
+Tomato Yellow Leaf Curl Virus (TYLCV)     0.9950    0.9813    0.9881       804
+                Tomato Bacterial Spot     0.9558    0.9498    0.9528       319
+                       Tomato Healthy     0.9791    0.9832    0.9811       238
+
+                             accuracy                         0.9665      1941
+                            macro avg     0.9505    0.9601    0.9551      1941
+                         weighted avg     0.9672    0.9665    0.9668      1941

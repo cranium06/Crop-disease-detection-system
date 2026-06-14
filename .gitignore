@@ -1,0 +1,31 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# --- Virtual environment (never commit) ---
+.venv/
+venv/
+env/
+
+# --- Local tooling / logs / scratch ---
+.claude/
+pip_install.log
+files.zip
+
+# --- Dataset: 180 MB, fetched from GitHub on demand — never commit ---
+data/
+
+# --- Academic write-up — not for public publishing ---
+*.docx
+
+# --- Derived checkpoint artefacts NOT needed to run the app ---
+# (the trained model + result figures ARE committed; the split is large and
+#  regenerable, so it is excluded)
+checkpoints/dataset_split.npz
+checkpoints/*_last.h5
+checkpoints/*_train_state.json
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db

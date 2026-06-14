@@ -1,0 +1,40 @@
+# =============================================================================
+# requirements-train.txt
+# Crop Disease Detection System — Kwara State University (2026)
+#
+# FULL training / evaluation stack — the documented environment from Chapter 3,
+# Section 3.9. Use this to run dataset_preparation.py / train.py / evaluate.py
+# locally or on Colab:  pip install -r requirements-train.txt
+#
+# The deployed Streamlit app (app.py) needs only a slim subset — see
+# requirements.txt, which is what Streamlit Community Cloud installs.
+#
+# NOTE: TensorFlow is pinned to 2.12.0 rather than 2.11.0. TF 2.11's protobuf
+# requirement (<3.20) is incompatible with Streamlit 1.32's requirement
+# (>=3.20) — the two cannot be installed in the same environment. TF 2.12
+# relaxed the protobuf pin and resolves the conflict. See IMPLEMENTATION_NOTES.md.
+#
+# NOTE: numpy is pinned to 1.23.5 rather than 1.24.0. TF 2.12 requires
+# numpy>=1.22,<1.24, so 1.24.0 is not installable alongside tensorflow==2.12.0.
+# 1.23.5 satisfies every other package's numpy constraint too. See
+# IMPLEMENTATION_NOTES.md.
+# =============================================================================
+
+# Deep learning framework (Section 3.9.2)
+tensorflow==2.12.0
+
+# Data processing and analysis (Section 3.9.3)
+numpy==1.23.5
+pandas==1.5.0
+scikit-learn==1.2.0
+
+# Image processing (Section 3.9.3)
+opencv-python==4.7.0.72
+Pillow==9.4.0
+
+# Visualisation (Section 3.9.3)
+matplotlib==3.7.0
+seaborn==0.12.0
+
+# Web application (Section 3.9.4)
+streamlit==1.32.0
