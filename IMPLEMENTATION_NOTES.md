@@ -426,6 +426,33 @@ overall accuracy **96.65%**, macro-F1 **0.9551** (vs. 93.25% / 0.911 for the
 earlier Phase-1-only baseline) — every class ≥ 0.89 F1, with Early Blight
 (the smallest/weakest class) improving most under Phase 2 fine-tuning.
 
+## 13. Deployment to Streamlit Community Cloud (added — packaging, no `.py` change)
+
+**Files added:** `requirements.txt` (now slim), `requirements-train.txt`,
+`.gitignore`, `README.md`; the project was made a git repo.
+
+To let the supervisor/teammates use the app from a permanent public URL (laptop
+off), `app.py` is deployed on Streamlit Community Cloud from a GitHub repo.
+
+- **Requirements split.** `app.py` imports only `streamlit`, `tensorflow`,
+  `numpy`, `PIL`, `matplotlib` (and `config.py`, stdlib-only). `requirements.txt`
+  was slimmed to exactly those, using **`tensorflow-cpu==2.12.0`** (no GPU on
+  Streamlit Cloud; smaller/faster install; 2.12.0 is the version proven to load
+  `mobilenetv2_best.h5`). The full documented Section 3.9 stack (opencv, sklearn,
+  pandas, seaborn, …) was preserved verbatim in **`requirements-train.txt`** for
+  training/eval. **Python 3.11 must be selected** in the Streamlit Cloud deploy
+  dialog (tensorflow-cpu 2.12.0 has no wheels for 3.12+).
+
+- **What ships in the repo.** Code + `README.md` + `checkpoints/mobilenetv2_best.h5`
+  (25.6 MB, under GitHub's 100 MB limit) + the result figures. **`.gitignore`
+  excludes** `data/` (180 MB dataset), `.venv/`, `__pycache__/`, the thesis
+  `*.docx`, scratch (`files.zip`, `pip_install.log`), and regenerable checkpoint
+  artefacts (`dataset_split.npz`, `_last.h5`, `_train_state.json`). Staging was
+  verified clean before the first commit.
+
+- **Note:** the deployed app and its GitHub repo are public (anyone with the URL
+  can use the app). The dataset is not redistributed (excluded from the repo).
+
 ## Summary of code changes
 
 | # | File | Change |
