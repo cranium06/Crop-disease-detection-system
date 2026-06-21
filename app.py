@@ -201,31 +201,44 @@ def main() -> None:
         )
         return
 
-    # Upload widget
-    st.subheader("Upload Image")
-    uploaded_file = st.file_uploader(
-        label="Select a tomato leaf image (JPG or PNG)",
-        type=["jpg", "jpeg", "png"],
-        help="For best results, ensure the leaf is clearly visible and well-lit.",
-    )
+    # Provide an image — by upload or by taking a photo (Section 3.3).
+    # st.camera_input lets a farmer snap a leaf directly from a phone or webcam.
+    st.subheader("Provide a tomato leaf image")
+    tab_upload, tab_camera = st.tabs(["📁 Upload an image", "📷 Take a photo"])
+    with tab_upload:
+        uploaded_file = st.file_uploader(
+            label="Select a tomato leaf image (JPG or PNG)",
+            type=["jpg", "jpeg", "png"],
+            help="For best results, ensure the leaf is clearly visible and well-lit.",
+        )
+    with tab_camera:
+        camera_photo = st.camera_input(
+            "Point your camera at a single tomato leaf and snap a photo",
+            help="Fill the frame with one leaf, in good light, against a plain background.",
+        )
 
-    if uploaded_file is None:
+    # A freshly taken photo takes priority over a previously uploaded file.
+    image_source = camera_photo if camera_photo is not None else uploaded_file
+
+    if image_source is None:
         st.info(
-            "Awaiting image upload. The system can detect the following conditions:\n\n"
+            "Awaiting an image — upload a photo or use the camera. The system "
+            "can detect the following conditions:\n\n"
             + "\n".join(f"- {name}" for name in config.CLASS_NAMES)
         )
         return
 
     # ------------------------------------------------------------------
-    # Display uploaded image
+    # Display the input image
     # ------------------------------------------------------------------
-    pil_image = Image.open(io.BytesIO(uploaded_file.read())).convert("RGB")
+    pil_image = Image.open(io.BytesIO(image_source.getvalue())).convert("RGB")
+    source_name = getattr(image_source, "name", None) or "camera photo"
 
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image(pil_image, caption="Uploaded Image", use_column_width=True)
+        st.image(pil_image, caption="Input image", use_column_width=True)
     with col2:
-        st.markdown(f"**File:** {uploaded_file.name}")
+        st.markdown(f"**Source:** {source_name}")
         st.markdown(f"**Original size:** {pil_image.width} × {pil_image.height} px")
         st.markdown(
             f"**Preprocessed to:** {config.IMAGE_WIDTH} × {config.IMAGE_HEIGHT} px "

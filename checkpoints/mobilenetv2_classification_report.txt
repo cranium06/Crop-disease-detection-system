@@ -1,5 +1,5 @@
 Backbone: MOBILENETV2
-Checkpoint: checkpoints/mobilenetv2_best.h5
+Checkpoint: checkpoints\mobilenetv2_best.h5
 Test set size: 1941 images
 
 Overall Accuracy : 96.65%
