@@ -1,27 +1,5 @@
 # =============================================================================
-# app.py
-#
-# Streamlit 1.32 web application for the Crop Disease Detection System.
-#
-# Usage:
-#   streamlit run app.py
-#
-# The application allows a user to upload a tomato leaf image and receive:
-#   - Predicted disease class
-#   - Confidence score (probability of top prediction)
-#   - Probability bar chart across all 6 classes
-#   - Plain-language management recommendation
-#
-# Preprocessing in this file mirrors the training pipeline EXACTLY
-# (load → resize 224×224 → [0,1] → ImageNet normalise) with NO augmentation,
-# matching Section 3.5 and satisfying the parameter consistency requirement.
-#
-# Chapter 3 references:
-#   Section 3.3    — system architecture and output specification
-#   Section 3.5.1  — image resizing (224×224)
-#   Section 3.5.2  — pixel normalisation (ImageNet mean/std)
-#   Section 3.9.4  — Streamlit 1.32 web application framework
-#   Section 3.9.3  — Pillow 9.4, Matplotlib 3.7
+# app.py  —  Streamlit 1.32 web application
 # =============================================================================
 
 import io
@@ -35,8 +13,22 @@ import tensorflow as tf
 
 import config
 
+SUPPORTED_DISEASES = [
+    "Early Blight", "Late Blight", "Leaf Mold",
+    "Yellow Leaf Curl Virus (TYLCV)", "Bacterial Spot",
+]
+
+SCOPE_NOTICE = (
+    "This system is trained **exclusively on tomato leaf images** and can only "
+    "identify the following conditions: "
+    + ", ".join(SUPPORTED_DISEASES)
+    + ", and Healthy. "
+    "Uploading images of other crops, objects, or non-leaf content will produce "
+    "**unreliable results**."
+)
+
 # ---------------------------------------------------------------------------
-# Page configuration
+# Page config + custom styling
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
@@ -46,71 +38,103 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@400;700&display=swap');
+
+    /* Main body text */
+    .stMarkdown p, .stMarkdown li {
+        font-family: 'Inter', sans-serif;
+        font-size: 16px;
+        line-height: 1.7;
+    }
+
+    /* Headings */
+    h1 {
+        font-family: 'Merriweather', Georgia, serif !important;
+        font-size: 2rem !important;
+        font-weight: 700 !important;
+        letter-spacing: -0.02em;
+    }
+    h2, h3 {
+        font-family: 'Merriweather', Georgia, serif !important;
+        font-weight: 600 !important;
+    }
+
+    /* Tabs */
+    .stTabs [data-baseweb="tab"] {
+        font-family: 'Inter', sans-serif;
+        font-size: 15px;
+        font-weight: 500;
+    }
+
+    /* Metric value */
+    [data-testid="stMetricValue"] {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 1.3rem !important;
+        font-weight: 600 !important;
+    }
+    [data-testid="stMetricDelta"] {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 0.95rem !important;
+    }
+
+    /* Info/success/warning/error boxes */
+    .stAlert p {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 15px !important;
+        line-height: 1.65 !important;
+    }
+
+    /* Caption / disclaimer */
+    .stCaption, [data-testid="stCaptionContainer"] p {
+        font-family: 'Inter', sans-serif !important;
+        font-size: 13px !important;
+    }
+
+    /* Subtitle styling */
+    .app-subtitle {
+        font-family: 'Inter', sans-serif;
+        font-size: 18px;
+        line-height: 1.7;
+        margin-bottom: 0.3rem;
+        opacity: 0.85;
+    }
+    .app-byline {
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-style: italic;
+        opacity: 0.6;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
 # ---------------------------------------------------------------------------
-# Model loading  — cached so the model is loaded only once per session
+# Model loading
 # ---------------------------------------------------------------------------
 
-@st.cache_resource(show_spinner="Loading model...")
+@st.cache_resource(show_spinner="Loading the detection model...")
 def load_model() -> tf.keras.Model:
-    """
-    Load the best MobileNetV2 checkpoint.
-    Primary model per Section 3.6.1 — MobileNetV2 selected for deployment
-    due to its 3.4M parameter footprint enabling CPU inference in 80–120 ms
-    (Section 3.9.5).
-    """
-    # compile=False: the app only runs inference (model.predict), so the
-    # optimiser/loss are unnecessary. It also avoids a cross-Keras-version
-    # deserialisation error when loading a model trained on Colab
-    # (Keras 2.15/2.17) under the local Keras 2.12 (see evaluate.py).
     model = tf.keras.models.load_model(config.MOBILENET_CKPT, compile=False)
     return model
 
 
 # ---------------------------------------------------------------------------
-# Preprocessing  (Section 3.5 — MUST match the training pipeline exactly)
+# Preprocessing  (must match training pipeline exactly)
 # ---------------------------------------------------------------------------
 
 def preprocess_image(pil_image: Image.Image) -> np.ndarray:
-    """
-    Preprocess a PIL image for model inference.
-    This function implements exactly the same steps as preprocessing.py,
-    minus data augmentation (Section 3.5.3: augmentation applied to
-    training set only).
-
-    Steps:
-      1. Resize to 224×224  (Section 3.5.1)
-      2. Convert to float32, divide by 255.0 → [0.0, 1.0]  (Section 3.5.2)
-      3. Subtract ImageNet channel mean, divide by channel std  (Section 3.5.2)
-      4. Add batch dimension → [1, 224, 224, 3]
-
-    Args:
-        pil_image: A PIL Image in RGB mode.
-
-    Returns:
-        NumPy float32 array of shape [1, 224, 224, 3], ready for model.predict().
-    """
-    # Step 1: resize to 224×224 (Section 3.5.1).
-    # Use tf.image.resize (bilinear) — the SAME interpolation as the training
-    # pipeline (preprocessing.py:load_and_resize) — so deployment preprocessing
-    # matches training EXACTLY. (PIL's LANCZOS was used here previously, which
-    # introduced a small train/serve skew: bilinear vs. LANCZOS differs enough
-    # to flip the prediction on borderline, low-confidence images.)
     rgb = pil_image.convert("RGB")
-    arr = np.array(rgb, dtype=np.uint8)                       # [H, W, 3], 0–255
+    arr = np.array(rgb, dtype=np.uint8)
     arr = tf.image.resize(
         arr, [config.IMAGE_HEIGHT, config.IMAGE_WIDTH]
-    ).numpy().astype(np.float32)                             # bilinear, still 0–255
-
-    # Step 2: [0, 255] → float32 [0.0, 1.0] (Section 3.5.2)
+    ).numpy().astype(np.float32)
     arr = arr / 255.0
-
-    # Step 3: ImageNet channel normalisation (Section 3.5.2)
-    mean = np.array(config.IMAGENET_MEAN, dtype=np.float32)  # [0.485, 0.456, 0.406]
-    std  = np.array(config.IMAGENET_STD,  dtype=np.float32)  # [0.229, 0.224, 0.225]
+    mean = np.array(config.IMAGENET_MEAN, dtype=np.float32)
+    std  = np.array(config.IMAGENET_STD,  dtype=np.float32)
     arr  = (arr - mean) / std
-
-    # Step 4: add batch dimension
-    return np.expand_dims(arr, axis=0)  # [1, 224, 224, 3]
+    return np.expand_dims(arr, axis=0)
 
 
 # ---------------------------------------------------------------------------
@@ -118,63 +142,57 @@ def preprocess_image(pil_image: Image.Image) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def predict(model: tf.keras.Model, image_array: np.ndarray) -> tuple:
-    """
-    Run inference and return the predicted class and full probability vector.
-
-    Returns:
-        predicted_class_idx:  int — index into config.CLASS_NAMES
-        predicted_class_name: str — human-readable disease name
-        confidence:           float — probability of predicted class (0.0–1.0)
-        probabilities:        np.ndarray — full [6] probability distribution
-    """
-    probs          = model.predict(image_array, verbose=0)[0]  # [6] probabilities
-    pred_idx       = int(np.argmax(probs))
-    pred_name      = config.CLASS_NAMES[pred_idx]
-    confidence     = float(probs[pred_idx])
+    probs      = model.predict(image_array, verbose=0)[0]
+    pred_idx   = int(np.argmax(probs))
+    pred_name  = config.CLASS_NAMES[pred_idx]
+    confidence = float(probs[pred_idx])
     return pred_idx, pred_name, confidence, probs
 
 
 # ---------------------------------------------------------------------------
-# Results visualisation
+# Chart
 # ---------------------------------------------------------------------------
 
 def render_probability_chart(probabilities: np.ndarray) -> plt.Figure:
-    """
-    Horizontal bar chart of predicted probabilities for all 6 classes.
-    Used in the Streamlit app alongside the top-1 prediction result.
-    Matplotlib 3.7 (Section 3.9.3).
-    """
-    # Short labels for the chart
     short_names = [
-        "Early Blight",
-        "Late Blight",
-        "Leaf Mold",
-        "TYLCV",
-        "Bacterial Spot",
-        "Healthy",
+        "Early Blight", "Late Blight", "Leaf Mold",
+        "TYLCV", "Bacterial Spot", "Healthy",
     ]
     top_idx = int(np.argmax(probabilities))
-    colours = ["#1f77b4"] * len(short_names)
-    colours[top_idx] = "#2ca02c"   # Highlight the top prediction in green
+    colours = ["#5a8a5a"] * len(short_names)
+    colours[top_idx] = "#2e7d32"
 
     fig, ax = plt.subplots(figsize=(6, 3.5))
     bars = ax.barh(short_names, probabilities * 100, color=colours, height=0.6)
-
-    # Value labels on bars
     for bar, prob in zip(bars, probabilities):
         ax.text(
-            bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
-            f"{prob * 100:.1f}%",
-            va="center", ha="left", fontsize=9
+            bar.get_width() + 0.8, bar.get_y() + bar.get_height() / 2,
+            f"{prob * 100:.1f}%", va="center", ha="left",
+            fontsize=9, fontfamily="sans-serif",
         )
-
     ax.set_xlim(0, 115)
-    ax.set_xlabel("Confidence (%)")
-    ax.set_title("Prediction Probabilities — All Classes", fontsize=10)
-    ax.invert_yaxis()   # Highest probability class at the top
-    ax.grid(axis="x", alpha=0.3)
+    ax.set_xlabel("Confidence (%)", fontsize=10, fontfamily="sans-serif")
+    ax.set_title("How confident is the model for each condition?",
+                 fontsize=11, fontfamily="sans-serif", fontweight="bold", pad=12)
+    ax.invert_yaxis()
+    ax.grid(axis="x", alpha=0.25)
+    ax.tick_params(labelsize=9)
     fig.tight_layout()
     return fig
+
+
+# ---------------------------------------------------------------------------
+# Human-friendly disease names (drop the "Tomato" prefix for display)
+# ---------------------------------------------------------------------------
+
+DISPLAY_NAMES = {
+    "Tomato Early Blight":                     "Early Blight",
+    "Tomato Late Blight":                      "Late Blight",
+    "Tomato Leaf Mold":                        "Leaf Mold",
+    "Tomato Yellow Leaf Curl Virus (TYLCV)":   "Yellow Leaf Curl Virus (TYLCV)",
+    "Tomato Bacterial Spot":                   "Bacterial Spot",
+    "Tomato Healthy":                          "Healthy",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -182,129 +200,168 @@ def render_probability_chart(probabilities: np.ndarray) -> plt.Figure:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    # Header
-    st.title("🌿 Crop Disease Detection System")
+    # ── Header ──────────────────────────────────────────────────
+    st.title("Crop Disease Detection System")
     st.markdown(
-        "Upload a photograph of a tomato leaf to receive an automated "
-        "disease diagnosis and management recommendations.\n\n"
-        "_Kwara State University — Computer Science Final Year Project, 2026_"
+        '<p class="app-subtitle">'
+        'Using Tomato as a Case Study'
+        '</p>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<p class="app-byline">'
+        'A final-year research project &mdash; '
+        'Department of Computer Science, Kwara State University, 2026'
+        '</p>',
+        unsafe_allow_html=True,
     )
     st.divider()
 
-    # Load model (cached)
+    # ── Load model ──────────────────────────────────────────────
     try:
         model = load_model()
     except OSError:
         st.error(
-            f"**Model checkpoint not found:** `{config.MOBILENET_CKPT}`\n\n"
-            "Run `train.py --backbone mobilenetv2` to train the model first."
+            "The detection model could not be found. "
+            "Please make sure the model file is in the **checkpoints/** folder."
         )
         return
 
-    # Provide an image — by upload or by taking a photo (Section 3.3).
-    # st.camera_input lets a farmer snap a leaf directly from a phone or webcam.
-    st.subheader("Provide a tomato leaf image")
-    tab_upload, tab_camera = st.tabs(["📁 Upload an image", "📷 Take a photo"])
+    # ── Scope notice ───────────────────────────────────────────
+    st.warning(SCOPE_NOTICE)
+
+    # ── Image input ─────────────────────────────────────────────
+    st.subheader("Step 1 — Provide a Tomato Leaf Image")
+    st.markdown(
+        "Take a clear photo of a **single tomato leaf**, or upload one from "
+        "your gallery. Make sure the leaf fills most of the frame and is "
+        "well-lit for the best results."
+    )
+
+    tab_upload, tab_camera = st.tabs(["Upload from gallery", "Use your camera"])
     with tab_upload:
         uploaded_file = st.file_uploader(
-            label="Select a tomato leaf image (JPG or PNG)",
+            label="Choose a photo of a tomato leaf (JPG or PNG)",
             type=["jpg", "jpeg", "png"],
-            help="For best results, ensure the leaf is clearly visible and well-lit.",
+            help="Pick a clear, well-lit image where the leaf is the main subject.",
         )
     with tab_camera:
         camera_photo = st.camera_input(
-            "Point your camera at a single tomato leaf and snap a photo",
-            help="Fill the frame with one leaf, in good light, against a plain background.",
+            "Point your camera at one tomato leaf and tap to capture",
+            help="Hold steady, fill the frame with the leaf, and use natural light.",
         )
 
-    # A freshly taken photo takes priority over a previously uploaded file.
     image_source = camera_photo if camera_photo is not None else uploaded_file
 
     if image_source is None:
         st.info(
-            "Awaiting an image — upload a photo or use the camera. The system "
-            "can detect the following conditions:\n\n"
-            + "\n".join(f"- {name}" for name in config.CLASS_NAMES)
+            "**Welcome!** This tool can help you identify the following "
+            "tomato leaf conditions:\n\n"
+            + "\n".join(f"- {d}" for d in SUPPORTED_DISEASES)
+            + "\n- Healthy (no disease detected)"
+            "\n\nUpload or capture a photo above to get started."
         )
         return
 
-    # ------------------------------------------------------------------
-    # Display the input image
-    # ------------------------------------------------------------------
+    # ── Display the uploaded image ──────────────────────────────
     pil_image = Image.open(io.BytesIO(image_source.getvalue())).convert("RGB")
-    source_name = getattr(image_source, "name", None) or "camera photo"
+    source_name = getattr(image_source, "name", None) or "Camera capture"
 
     col1, col2 = st.columns([1, 2])
     with col1:
-        st.image(pil_image, caption="Input image", use_column_width=True)
+        st.image(pil_image, caption="Your uploaded image", use_column_width=True)
     with col2:
-        st.markdown(f"**Source:** {source_name}")
-        st.markdown(f"**Original size:** {pil_image.width} × {pil_image.height} px")
+        st.markdown(f"**File:** {source_name}")
         st.markdown(
-            f"**Preprocessed to:** {config.IMAGE_WIDTH} × {config.IMAGE_HEIGHT} px "
-            f"(Section 3.5.1)"
+            f"**Image size:** {pil_image.width} x {pil_image.height} pixels"
+        )
+        st.markdown(
+            "The image will be resized and normalised automatically "
+            "before analysis."
         )
 
     st.divider()
 
-    # ------------------------------------------------------------------
-    # Inference
-    # ------------------------------------------------------------------
-    with st.spinner("Analysing image..."):
-        image_array           = preprocess_image(pil_image)
+    # ── Run inference ───────────────────────────────────────────
+    with st.spinner("Analysing your image — this takes just a moment..."):
+        image_array = preprocess_image(pil_image)
         pred_idx, pred_name, confidence, probs = predict(model, image_array)
 
-    # ------------------------------------------------------------------
-    # Results
-    # ------------------------------------------------------------------
-    st.subheader("Diagnosis Result")
+    # ── Results ─────────────────────────────────────────────────
+    display_name = DISPLAY_NAMES.get(pred_name, pred_name)
+    is_healthy = (pred_idx == config.CLASS_NAMES.index("Tomato Healthy"))
 
-    # Top-1 prediction and confidence
-    is_healthy  = (pred_idx == config.CLASS_NAMES.index("Tomato Healthy"))
-    alert_level = "success" if is_healthy else "error"
+    st.subheader("Step 2 — Diagnosis Result")
 
-    if is_healthy:
-        st.success(f"**{pred_name}**  —  Confidence: {confidence * 100:.1f}%")
-    elif confidence >= 0.80:
-        st.error(f"**{pred_name}**  —  Confidence: {confidence * 100:.1f}%")
-    elif confidence >= 0.50:
-        st.warning(f"**{pred_name}**  —  Confidence: {confidence * 100:.1f}%")
-    else:
-        st.warning(
-            f"**{pred_name}**  —  Confidence: {confidence * 100:.1f}%\n\n"
-            "_Low confidence — consider uploading a clearer image or consult "
-            "an agricultural extension officer._"
+    if is_healthy and confidence >= 0.50:
+        st.success(
+            f"**Your tomato leaf looks healthy!**\n\n"
+            f"The model is **{confidence * 100:.1f}% confident** that this leaf "
+            f"shows no signs of disease. Keep up the good work with your crop care!"
         )
+    elif confidence >= 0.80:
+        st.error(
+            f"**Disease detected: {display_name}**\n\n"
+            f"The model is **{confidence * 100:.1f}% confident** in this diagnosis. "
+            f"Please review the management advice below and consider taking action soon."
+        )
+    elif confidence >= 0.50:
+        st.warning(
+            f"**Possible disease: {display_name}**\n\n"
+            f"The model is **{confidence * 100:.1f}% confident** — this is a moderate "
+            f"confidence level. The leaf may be showing early symptoms. Review the advice "
+            f"below and monitor the plant closely."
+        )
+    else:
+        st.error(
+            f"**Uncertain result — please check your image.**\n\n"
+            f"The model's confidence is only **{confidence * 100:.1f}%**, which is very "
+            f"low. This usually means the image is **not a clear tomato leaf**, or the "
+            f"photo is too blurry, dark, or cropped.\n\n"
+            f"**Remember:** This system **only detects diseases in tomato leaves**. "
+            f"It cannot identify diseases in other crops, and uploading non-tomato images "
+            f"will produce unreliable results.\n\n"
+            f"**Please try again with:**\n"
+            f"- A clear, well-lit photo of a **single tomato leaf**\n"
+            f"- The leaf filling most of the frame\n"
+            f"- No heavy shadows or overlapping leaves"
+        )
+        return
 
-    # Confidence metric
     st.metric(
-        label="Top Prediction",
-        value=pred_name,
+        label="Detected Condition",
+        value=display_name,
         delta=f"{confidence * 100:.1f}% confidence",
         delta_color="off",
     )
 
-    # Probability chart (all 6 classes)
-    st.subheader("Confidence Across All Classes")
+    # ── Probability chart ───────────────────────────────────────
+    st.subheader("Step 3 — Detailed Breakdown")
+    st.markdown(
+        "The chart below shows how confident the model is for **each possible "
+        "condition**. A taller bar means the model thinks that condition is "
+        "more likely."
+    )
     fig = render_probability_chart(probs)
     st.pyplot(fig)
     plt.close(fig)
 
-    # Management recommendations (Section 3.3)
-    st.subheader("Management Recommendation")
+    # ── Management advice ───────────────────────────────────────
+    st.subheader("Step 4 — What You Can Do")
     recommendation = config.MANAGEMENT.get(pred_name, "")
     if is_healthy:
         st.success(recommendation)
     else:
         st.warning(recommendation)
 
-    # Disclaimer
+    # ── Disclaimer ──────────────────────────────────────────────
     st.divider()
     st.caption(
-        "⚠️ This diagnosis is advisory only. For severe outbreaks or uncertain results, "
-        "consult a certified agricultural extension officer or plant pathologist. "
-        "Management recommendations are based on established agricultural literature "
-        "and are not precision prescriptions for individual farm conditions."
+        "This diagnosis is for guidance only and should not replace professional "
+        "advice. For severe or widespread symptoms, please consult a certified "
+        "agricultural extension officer or plant pathologist. The recommendations "
+        "provided are based on established agricultural literature and may need to "
+        "be adapted to your specific farm conditions."
     )
 
 
