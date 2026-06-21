@@ -181,12 +181,12 @@
   .det-note{margin-top:auto;padding-top:1rem;font-size:.78rem;color:var(--ink-soft)}
   .det-altlink{margin-top:.6rem;font-size:.86rem;color:var(--ink-soft)}
   .det-altlink a{color:var(--leaf);font-weight:600}
-  @media(max-width:760px){.detector{grid-template-columns:1fr}}
+  @media(max-width:760px){.detector{grid-template-columns:minmax(0,1fr)}}
 
   /* ---------- Research ---------- */
   .research{background:linear-gradient(180deg,#edefdb,var(--cream))}
   .res-grid{display:grid;grid-template-columns:.95fr 1.05fr;gap:3rem;align-items:center}
-  .metric-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-top:1.6rem}
+  .metric-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem;margin-top:1.6rem}
   .metric{background:var(--cream-2);border:1px solid var(--line);border-radius:18px;padding:1.3rem 1.4rem}
   .metric b{font-family:var(--display);font-weight:700;font-size:2.1rem;color:var(--forest);display:block;line-height:1}
   .metric span{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
@@ -266,18 +266,18 @@
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(111,178,58,.55)}70%{box-shadow:0 0 0 9px rgba(111,178,58,0)}100%{box-shadow:0 0 0 0 rgba(111,178,58,0)}}
 
   @media(max-width:960px){
-    .hero-grid,.sp-grid,.res-grid,.contact-grid{grid-template-columns:1fr}
+    .hero-grid,.spotlight .sp-grid,.res-grid,.contact-grid{grid-template-columns:minmax(0,1fr)}
     .spotlight .sp-grid{gap:2.4rem}
-    .feat-grid,.steps,.gal-grid{grid-template-columns:repeat(2,1fr)}
-    .team-grid{grid-template-columns:repeat(2,1fr)}
+    .feat-grid,.steps,.gal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .team-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
     .scanner{margin-top:1rem}
     .hero{padding-top:8.5rem}
   }
   @media(max-width:680px){
     .menu,.nav-cta .btn{display:none}
     .hamburger{display:flex}
-    .feat-grid,.steps,.gal-grid,.team-grid{grid-template-columns:1fr}
-    .metric-cards{grid-template-columns:repeat(2,1fr)}
+    .feat-grid,.steps,.gal-grid,.team-grid{grid-template-columns:minmax(0,1fr)}
+    .metric-cards{grid-template-columns:repeat(2,minmax(0,1fr))}
     .section{padding:4.2rem 0}
     .hero h1{font-size:clamp(2.1rem,9vw,2.9rem)}
     .embed-frame iframe{height:600px}
